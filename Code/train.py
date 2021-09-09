@@ -62,6 +62,7 @@ def main(args):
             else:    
                 model_state_dict[key] = pretrained_state_dict[key]
         model.load_state_dict(model_state_dict, strict = False)
+        print('pretrained by MS_Celeb_1M')
 
     # Dataloader
     train_dataset =  ImageDataset(img_dir=img_dir, txt_dir=train_txt_dir,
