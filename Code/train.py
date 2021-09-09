@@ -33,10 +33,14 @@ def main(args):
     # Dataset
     if args.dataset == 'RAF-DB':
         args.num_classes = 7
-        # subset
+        # RAF-DB subset
         if args.subset == 'base':
             img_dir = os.path.join(root_dir, 'Data/RAF-DB/Aligned')
             train_txt_dir = os.path.join(root_dir,'Text/RAF-DB/base_train.txt')
+            val_txt_dir = os.path.join(root_dir,'Text/RAF-DB/base_val.txt')
+        if args.subset == 'flip':
+            img_dir = os.path.join(root_dir, 'Data/RAF-DB/Aligned')
+            train_txt_dir = os.path.join(root_dir,'Text/RAF-DB/flip_train.txt')
             val_txt_dir = os.path.join(root_dir,'Text/RAF-DB/base_val.txt')
 
     # Model

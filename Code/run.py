@@ -16,7 +16,7 @@ def main():
 
     train_args = param.train_args(command)
 
-    if args.mode == 'trian':
+    if args.mode == 'train':
         train.main(train_args)
 
 if __name__ == '__main__':

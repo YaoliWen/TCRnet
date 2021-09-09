@@ -1,6 +1,7 @@
 # 数据集
 dataset_dic = {
     'RAF0':'--dataset RAF-DB --subset base',
+    'RAFf':'--dataset RAF-DB --subset flip',
 }
 
 # 模型
@@ -49,8 +50,9 @@ device_cmd = {
 scheme_dict = {
     'Baseline':{
         '0': 'RAF0_TCR2v_e0_p0_l0_b0_d0', # 
+        '1': 'RAFf_TCR2v_e0_p0_l0_b0_d0', # 
     },
-    
+
     'TC_Res':{
             '0': 'RAF0_TCR2v_e0_p0_l0_b0_d0', # 
         },
