@@ -200,6 +200,8 @@ class TCRnet(nn.Module):
         if self.n_layers>0:
             self.trans3 = EncoderLayer(model_dim=256, num_heads=num_heads, dropout=dropout, bias=bias)
         self.layer4 = self._make_layer(block=BasicBlock, planes=512, blocks=blocks, stride=2) # 512*7*7->512*7*7
+        if pool_type=='gap':
+            self.avgpool = nn.AdaptiveAvgPool2d(1) # B*512*1*1
         if pool_type=='avg':
             self.trans4 = EncoderLayer(model_dim=512, num_heads=num_heads, dropout=dropout, bias=bias)
             self.avgpool = nn.AdaptiveAvgPool2d(1) # B*512*1*1
@@ -260,13 +262,18 @@ class TCRnet(nn.Module):
             f, attention3 = self.trans3(f) # [B,256,14,14]
             attention.append(attention3)
         f = self.layer4(f) # [B,512,7,7]
+        if self.pool_type=='gap':
+            f = self.avgpool(f) # [B,512,1,1]
+            f = f.squeeze(3).squeeze(2) # [B,512]
         if self.pool_type=='avg':
             f, attention4 = self.trans4(f) # [B,512,7,7]
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
+            attention.append(attention4)
         if self.pool_type=='vit':
             f, attention4 = self.vitpool(f) # [B,512]
-        attention.append(attention4)
+            attention.append(attention4)
+        
         if self.is_BN:
             f = self.bn2(f)
         prec_score = self.fc(f)

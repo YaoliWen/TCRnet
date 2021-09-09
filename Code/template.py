@@ -5,6 +5,8 @@ dataset_dic = {
 
 # 模型
 model_cmd = {
+    'base':"--model TCR_0 -n_b 2 -pt gap ",
+
     'TCR0a': "--model TCR_0 -n_b 2 -pt avg ",
     'TCR1a': "--model TCR_1 -n_b 2 -pt avg ",
     'TCR2a': "--model TCR_2 -n_b 2 -pt avg ",
@@ -45,6 +47,10 @@ device_cmd = {
 
 # 模板dictionary
 scheme_dict = {
+    'Baseline':{
+        '0': 'RAF0_TCR2v_e0_p0_l0_b0_d0', # 
+    },
+    
     'TC_Res':{
             '0': 'RAF0_TCR2v_e0_p0_l0_b0_d0', # 
         },

@@ -15,7 +15,7 @@ def main(args):
     # Define global variable
     root_dir = os.path.dirname(os.path.dirname(__file__))
     base_file_name = util.base_file_name(args)
-    out_root = os.path.join(root_dir, 'Out')
+    out_root = os.path.join(root_dir, 'Out/base')
     checkp_dir = os.path.join(out_root+'/Checkpoint', base_file_name)
     summary_dir = os.path.join(out_root+'/Tensorboard', base_file_name)
     log_dir = out_root + '/Log/' + base_file_name + '.log'
