@@ -54,7 +54,8 @@ scheme_dict = {
     },
 
     'TC_Res':{
-            '0': 'RAF0_TCR2v_e0_p0_l0_b0_d0', # 
+            '0': 'RAF0_TCR2v_e0_p0_l0_b0_d0', #
+            '1': 'RAFf_TCR2v_e0_p0_l0_b0_d0', #  
         },
 }
 

@@ -59,6 +59,6 @@ def run_args():
     parser = argparse.ArgumentParser(description='Run Trian File')
     parser.add_argument('-s', '--scheme', type=str)
     parser.add_argument('-d', '--device', type=str)
-    parser.add_argument('-m', '--mode', type=str, default='trian')
+    parser.add_argument('-m', '--mode', type=str, default='train')
     args = parser.parse_args()
     return args
