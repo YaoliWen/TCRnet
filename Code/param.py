@@ -42,7 +42,7 @@ def train_args(command):
     parser.add_argument('-n_b', '--blocks', default=2, type=int,
                         help='the number of CNN blocks (default:2)')
     parser.add_argument('--pool_type', '-pt', default='avg',
-                        choices=['avg','vit'],
+                        choices=['avg','vit','gap'],
                         type=str, help='type of the last pooling layer')
     # encoder
     parser.add_argument('-n_h', '--num_heads', default=8, type=int,
