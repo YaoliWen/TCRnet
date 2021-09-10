@@ -44,13 +44,19 @@ def train_args(command):
     parser.add_argument('--pool_type', '-pt', default='avg',
                         choices=['avg','vit','gap'],
                         type=str, help='type of the last pooling layer')
+    parser.add_argument('--trans_layer', '-trans', type=str, help='selected transformer layer')
     # encoder
     parser.add_argument('-n_h', '--num_heads', default=8, type=int,
                         help='the number of heads (default:8)')
-    parser.add_argument('--bias', '-bi', default=False, action='store_true', help='attention bias')
+    set_bool_action(parser=parser, param_name='bias', command_name='bi')
     parser.add_argument('--dropout', '-dp', default=0.0 , type=float, help= 'dropout rate')
     # name
     parser.add_argument('--name', default=None , type=str, help= 'template name')
+
+    # loss
+    set_bool_action(parser=parser, param_name='var_loss', command_name='var')
+    parser.add_argument('--var_rate', '-vr', default=0.0 , type=float, help= 'rate of variance loss')
+
     args = parser.parse_args(shlex.split(command))
     return args
 
@@ -62,3 +68,9 @@ def run_args():
     parser.add_argument('-m', '--mode', type=str, default='train')
     args = parser.parse_args()
     return args
+
+def set_bool_action(parser, param_name, command_name):
+    parser.add_argument('-{}'.format(command_name), dest=param_name, action='store_true')
+    parser.add_argument('-no_{}'.format(command_name), dest=param_name, action='store_false')
+    parser.set_defaults(**{param_name:False})
+

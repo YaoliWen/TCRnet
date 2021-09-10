@@ -6,22 +6,22 @@ dataset_dic = {
 
 # 模型
 model_cmd = {
-    'base':"--model TCR_0 -n_b 2 -pt gap ",
+    'base':"--model TCR -trans 0 -n_b 2 -pt gap ",
 
-    'TCR0a': "--model TCR_0 -n_b 2 -pt avg ",
-    'TCR1a': "--model TCR_1 -n_b 2 -pt avg ",
-    'TCR2a': "--model TCR_2 -n_b 2 -pt avg ",
-    'TCR3a': "--model TCR_3 -n_b 2 -pt avg ",
+    'Tn0a': "--model TCR -trans 0 -n_b 2 -pt avg ",
+    'Tn1a': "--model TCR -trans 3 -n_b 2 -pt avg ",
+    'Tn2a': "--model TCR -trans 23 -n_b 2 -pt avg ",
+    'Tn3a': "--model TCR -trans 123 -n_b 2 -pt avg ",
 
-    'TCR0v': "--model TCR_0 -n_b 2 -pt vit ",
-    'TCR1v': "--model TCR_1 -n_b 2 -pt vit ",
-    'TCR2v': "--model TCR_2 -n_b 2 -pt vit ",
-    'TCR3v': "--model TCR_3 -n_b 2 -pt vit ",
+    'Tn0v': "--model TCR -trans 0 -n_b 2 -pt vit ",
+    'Tn1v': "--model TCR -trans 3 -n_b 2 -pt vit ",
+    'Tn2v': "--model TCR -trans 23 -n_b 2 -pt vit ",
+    'Tn3v': "--model TCR -trans 123 -n_b 2 -pt vit ",
 } 
 
 # encoder layer
 encoder_cmd = {
-    'e0': "-n_h 8 -dp 0.0", # -bi
+    'e0': "-n_h 8 -dp 0.0 -no_bi", # 
 }
 
 # 预训练模型
@@ -44,6 +44,10 @@ device_cmd = {
     'd0': "--epochs 150 -mi_b 64 -j 8",
 }
 
+# 损失参数
+loss_cmd = {
+    'c0': "-var -vr 1"
+}
 
 
 # 模板dictionary
@@ -54,12 +58,12 @@ scheme_dict = {
     },
 
     'TC_Res':{
-            '0': 'RAF0_TCR2v_e0_p0_l0_b0_d0', #
-            '1': 'RAFf_TCR2v_e0_p0_l0_b0_d0', #  
+            '0': 'RAF0_Tn2v_e0_c0_p0_l0_b0_d0', #
+            '1': 'RAFf_Tn2v_e0_c0_p0_l0_b0_d0', #  
         },
 }
 
 # 命令集dictionary
 command_dict = {**dataset_dic, **model_cmd, **encoder_cmd, **pretrain_cmd,
-                **lr_batch_cmd, **basic_cmd, **device_cmd}
+                **lr_batch_cmd, **basic_cmd, **device_cmd, **loss_cmd}
 

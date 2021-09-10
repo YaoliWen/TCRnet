@@ -7,6 +7,7 @@ import os
 import sys
 import util
 import time
+import loss_fn
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -46,7 +47,7 @@ def main(args):
     # Model
     # choose model type
     if 'TCR' in args.model:
-        model = TCRnet(num_classes=args.num_classes, pool_type=args.pool_type,
+        model = TCRnet(num_classes=args.num_classes, trans_layer=args.trans_layer, pool_type=args.pool_type,
                         num_heads=args.num_heads, blocks=args.blocks, bias=args.bias, 
                         dropout=args.dropout, model_type=args.model)
     # parallel computer
@@ -80,7 +81,10 @@ def main(args):
             num_workers=args.workers, pin_memory=True) # 验证集dataloader
 
     # Criterion
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = {}
+    criterion['base'] = nn.CrossEntropyLoss().cuda()
+    if args.var_loss:
+        criterion['var'] = loss_fn.VarLoss().cuda()
 
     # Optimizer
     optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr ,
@@ -91,7 +95,7 @@ def main(args):
     # Epoch
     for epoch in range(args.epochs):
         # display split line 
-        print('{:#^75}'.format(' Epoch {} '.format(epoch)))
+        print('{:#^120}'.format(' Epoch {} '.format(epoch)))
 
         # 调整学习率
         util.adjust_learning_rate(args=args, optimizer=optimizer, epoch=epoch) # 调整学习率
@@ -124,6 +128,7 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
     prec_acc = util.MatrixMeter(args.num_classes)
     loss_data = util.AverageMeter()
     base_loss_data = util.AverageMeter()
+    var_loss_data = util.AverageMeter()
     batch_num = len(train_loader)-1
     record_interval = (batch_num // 50 + 1) * 10
 
@@ -138,11 +143,18 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         # Forward propagation
         input_var = torch.autograd.Variable(img.cuda()) # [B, 3, 224, 224] 放入变量图中
         target_var = torch.autograd.Variable(label.cuda()) # [B,1] 放入变量图中
-        prec_score, _ = model(input_var)
+        prec_score, attention_all = model(input_var)
 
         # Loss
-        base_loss = criterion(prec_score, target_var) # crossentropy的均值
+        # base loss
+        base_loss = criterion['base'](prec_score, target_var) # crossentropy的均值
         loss = base_loss
+        # variance loss
+        if args.var_loss:
+            var_loss = criterion['var'](attention_all)
+            loss += args.var_rate * var_loss.sum()
+
+        
 
         # Back propagation
         loss_mini = loss * mini_batch_size / args.batch_size
@@ -156,18 +168,25 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         prec_acc.update(prec_score.cpu(), label.cpu())
         loss_data.update(loss.item())
         base_loss_data.update(base_loss.item())
+        var_loss_data.update(var_loss.cpu().numpy() * args.var_rate)
 
         # Display and save value result
         if i % record_interval == 0:
             print(
-                '{:<12}{:<12}{:<21}{}'.format('[{:0>3}/{}]'.format(i, batch_num),
-                 'epoch:{:0>3}'.format(epoch),'loss:{:0<13.11f}'.format(loss_data.val())
-                , 'acc:{:0<8.6f}'.format(prec_acc.val_acc()))
+                '{:<12}{:<12}{:<21}{:<26}{:<25}{}'.format('[{:0>3}/{}]'.format(i, batch_num),
+                 'epoch:{:0>3}'.format(epoch), 'loss:{:0<13.11f}'.format(loss_data.val()),
+                 'base loss:{:0<13.11f}'.format(base_loss_data.val()),
+                 'var loss:{:0<13.11f}'.format(var_loss_data.val().sum()),
+                 'acc:{:0<8.6f}'.format(prec_acc.val_acc()))
             )
             with SummaryWriter(args.summary_dir) as writer: 
                 writer.add_scalar('Val_trian/base_loss', base_loss_data.val(), counter)
                 writer.add_scalar('Val_trian/Loss', loss_data.val(), counter)
                 writer.add_scalar('Val_trian/Acc', prec_acc.val_acc(), counter)
+                for j, layer_num in enumerate(args.trans_layer):
+                    writer.add_scalar('Val_trian/var_loss_'+layer_num, var_loss_data.val()[j], counter)
+                if args.pool_type in ['avg', 'vit']:
+                    writer.add_scalar('Val_trian/var_loss_4', var_loss_data.val()[-1], counter)
             counter += 1
         
     # Final grad update
@@ -180,13 +199,20 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         writer.add_scalar('Avg_trian/base_loss', base_loss_data.avg(), epoch)
         writer.add_scalar('Avg_trian/Loss', loss_data.avg(), epoch)
         writer.add_scalar('Avg_trian/Acc', prec_acc.avg_acc(), epoch)
+
         for i, lab_acc in enumerate(prec_acc.label_acc()):
             writer.add_scalar('Avg_trian_label/acc'+str(i), lab_acc, epoch)
         heatmap = util.heatmap(prec_acc.confus_matrix(), args.dataset)
         writer.add_figure(tag='Train Confusion Matrix',
                           figure=heatmap, global_step=epoch)
-    print('Train [{:0>3}]  Loss:{:0<13.11f}  Acc:{:0<8.6f}  Time:{:.2f}'.format(
-            epoch, loss_data.val(), prec_acc.avg_acc(), time.time()-start))
+
+        for j, layer_num in enumerate(args.trans_layer):
+            writer.add_scalar('Avg_trian/var_loss_'+layer_num, var_loss_data.avg()[j], epoch)
+        if args.pool_type in ['avg', 'vit']:
+            writer.add_scalar('Avg_trian/var_loss_4', var_loss_data.avg()[-1], epoch)
+
+    print('Train [{:0>3}]  Loss:{:0<13.11f}  Base loss:{:0<13.11f}  Var loss:{:0<13.11f}  Acc:{:0<8.6f}  Time:{:.2f}'.format(
+            epoch, loss_data.avg(), base_loss_data.avg(), var_loss_data.avg().sum(), prec_acc.avg_acc(), time.time()-start))
     return counter
 
 
@@ -197,6 +223,7 @@ def validate(args, val_loader, model, criterion, epoch):
         prec_acc = util.MatrixMeter(args.num_classes)
         loss_data = util.AverageMeter()
         base_loss_data = util.AverageMeter()
+        var_loss_data = util.AverageMeter()
 
         # switch to evaluate mode
         model.eval()
@@ -205,27 +232,39 @@ def validate(args, val_loader, model, criterion, epoch):
             # Forward propagation
             input_var = torch.autograd.Variable(img.cuda()) # [B, 3, 224, 224] 放入变量图中
             target_var = torch.autograd.Variable(label.cuda()) # [B,1] 放入变量图中
-            prec_score, _ = model(input_var)
+            prec_score, attention_all = model(input_var)
 
             # Loss
-            base_loss = criterion(prec_score, target_var) # crossentropy的均值
+            base_loss = criterion['base'](prec_score, target_var) # crossentropy的均值
             loss = base_loss
+            # variance loss
+            if args.var_loss:
+                var_loss = criterion['var'](attention_all)
+                loss += args.var_rate * var_loss.sum()
 
             # Update data
             prec_acc.update(prec_score.cpu(), target_var.cpu())
             loss_data.update(loss.item())
             base_loss_data.update(base_loss.item())
+            var_loss_data.update(var_loss.cpu().numpy() * args.var_rate)
 
         # Display and save avg result 
         with SummaryWriter(args.summary_dir) as writer: 
             writer.add_scalar('Avg_test/base_loss', base_loss_data.avg(), epoch)
             writer.add_scalar('Avg_test/Loss', loss_data.avg(), epoch)
             writer.add_scalar('Avg_test/Acc', prec_acc.avg_acc(), epoch)
+
             for i, lab_acc in enumerate(prec_acc.label_acc()):
                 writer.add_scalar('Avg_test_label/acc'+str(i), lab_acc, epoch)
             heatmap = util.heatmap(prec_acc.confus_matrix(), args.dataset)
             writer.add_figure(tag='Test Confusion Matrix',
                               figure=heatmap, global_step=epoch)
-        print("Test  [{:0>3}]  Loss:{:0<13.11f}  Acc:{:0<8.6f}  Time:{:.2f}".format(
-                epoch, loss_data.val(), prec_acc.avg_acc(), time.time()-start))
+
+            for j, layer_num in enumerate(args.trans_layer):
+                writer.add_scalar('Avg_test/var_loss_'+layer_num, var_loss_data.avg()[j], epoch)
+            if args.pool_type in ['avg', 'vit']:
+                writer.add_scalar('Avg_test/var_loss_4', var_loss_data.avg()[-1], epoch)
+
+        print("Test  [{:0>3}]  Loss:{:0<13.11f}  Base loss:{:0<13.11f}  Var loss:{:0<13.11f}  Acc:{:0<8.6f}  Time:{:.2f}".format(
+            epoch, loss_data.avg(), base_loss_data.avg(), var_loss_data.avg().sum(), prec_acc.avg_acc(), time.time()-start))
     return prec_acc.avg_acc()

@@ -180,33 +180,33 @@ class Vit_EncoderLayer(nn.Module):
         return out, attention
 # 
 class TCRnet(nn.Module):
-    def __init__(self, num_classes, pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
+    def __init__(self, num_classes, trans_layer='0', pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
         super(TCRnet, self).__init__() # 输入 B*3*224*224
         self.inplanes = 64
         self.model_type = model_type
-        self.n_layers = int(model_type.split('_')[-1])
+        self.trans_layer = trans_layer
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)  #(224-6+6)/2=112 64*112*112
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1) # (112-2+2)/2=56 64*56*56
         self.layer1 = self._make_layer(block=BasicBlock, planes=64, blocks=blocks, stride=1) # 64*56*56->64*56*56
-        if self.n_layers>2:
+        if '1' in self.trans_layer:
             self.trans1 = EncoderLayer(model_dim=64, num_heads=num_heads, dropout=dropout, bias=bias)
         self.layer2 = self._make_layer(block=BasicBlock, planes=128, blocks=blocks, stride=2) # 128*28*28->128*28*28
-        if self.n_layers>1:
+        if '2' in self.trans_layer:
             self.trans2 = EncoderLayer(model_dim=128, num_heads=num_heads, dropout=dropout, bias=bias)
         self.layer3 = self._make_layer(block=BasicBlock, planes=256, blocks=blocks, stride=2) # 256*14*14—>256*14*14
-        if self.n_layers>0:
+        if '3' in self.trans_layer:
             self.trans3 = EncoderLayer(model_dim=256, num_heads=num_heads, dropout=dropout, bias=bias)
         self.layer4 = self._make_layer(block=BasicBlock, planes=512, blocks=blocks, stride=2) # 512*7*7->512*7*7
         if pool_type=='gap':
-            self.avgpool = nn.AdaptiveAvgPool2d(1) # B*512*1*1
+            self.avgpool = nn.AdaptiveAvgPool2d(1) # 512*7*7->B*512*1*1
         if pool_type=='avg':
-            self.trans4 = EncoderLayer(model_dim=512, num_heads=num_heads, dropout=dropout, bias=bias)
-            self.avgpool = nn.AdaptiveAvgPool2d(1) # B*512*1*1
+            self.trans4 = EncoderLayer(model_dim=512, num_heads=num_heads, dropout=dropout, bias=bias) # 512*7*7->512*7*7
+            self.avgpool = nn.AdaptiveAvgPool2d(1) # 512*7*7->B*512*1*1
         if pool_type=='vit':
-            self.vitpool = Vit_EncoderLayer(model_dim=512, num_heads=num_heads, dropout=dropout, bias=bias)
+            self.vitpool = Vit_EncoderLayer(model_dim=512, num_heads=num_heads, dropout=dropout, bias=bias) # 512*7*7->B*512
         self.pool_type = pool_type
         self.softmax = nn.Softmax(-1)
         self.fc = nn.Linear(512, num_classes)
@@ -250,18 +250,25 @@ class TCRnet(nn.Module):
         f = self.relu(f)
         f = self.maxpool(f) # [B,64,56,56]
         f = self.layer1(f)  # [B,64,56,56]
-        if self.n_layers>2:
+
+        if '1' in self.trans_layer:
             f, attention1 = self.trans1(f) # [B,64,56,56]
-            attention.append(attention1)
+            attention.append(attention1) # [B,num_head,3136,3136]
+
         f = self.layer2(f) # [B,128,28,28]
-        if self.n_layers>1:
+
+        if '2' in self.trans_layer:
             f, attention2 = self.trans2(f) # [B,128,28,28]
-            attention.append(attention2)
+            attention.append(attention2) # [B,num_head,784,784]
+
         f = self.layer3(f) # [B,256,14,14]
-        if self.n_layers>0:
+
+        if '3' in self.trans_layer:
             f, attention3 = self.trans3(f) # [B,256,14,14]
-            attention.append(attention3)
+            attention.append(attention3) # [B,num_head,196,196]
+
         f = self.layer4(f) # [B,512,7,7]
+
         if self.pool_type=='gap':
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
@@ -269,7 +276,7 @@ class TCRnet(nn.Module):
             f, attention4 = self.trans4(f) # [B,512,7,7]
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
-            attention.append(attention4)
+            attention.append(attention4) # [B,num_head,49,49]
         if self.pool_type=='vit':
             f, attention4 = self.vitpool(f) # [B,512]
             attention.append(attention4)

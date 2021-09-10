@@ -1,8 +1,12 @@
 # encoding: utf-8
 import os
+import sys
 from PIL import Image
 import torch.utils.data as data
 import torchvision.transforms as transforms
+
+# stand output
+std_out = sys.stdout
 
 def get_RAF(img_dir, txt_dir):
     imgs_label_all = []
@@ -13,7 +17,7 @@ def get_RAF(img_dir, txt_dir):
             label = line.split(' ')[-1]
             label = int(label)-1
             imgs_label_all.append((path, label))
-            print(path)
+            print(path, file=std_out)
     return imgs_label_all
 
 def load_imgs(img_dir, txt_dir, dataset_name):
