@@ -18,6 +18,17 @@ model_cmd = {
     'Tn2v': "--model TCR -trans 23 -n_b 2 -pt vit",
     'Tn3v': "--model TCR -trans 123 -n_b 2 -pt vit",
 
+    'T0a': "--model TCR -trans 0 -n_b 2 -pt avg",
+    'T1a': "--model TCR -trans 1 -n_b 2 -pt avg",
+    'T2a': "--model TCR -trans 2 -n_b 2 -pt avg",
+    'T3a': "--model TCR -trans 3 -n_b 2 -pt avg",
+
+    'T0v': "--model TCR -trans 0 -n_b 2 -pt vit",
+    'T1v': "--model TCR -trans 1 -n_b 2 -pt vit",
+    'T2v': "--model TCR -trans 2 -n_b 2 -pt vit",
+    'T3v': "--model TCR -trans 3 -n_b 2 -pt vit",
+    
+
     'Trn0a': "--model TCR -trans 0 -n_b 2 -pt avg -res",
     'Trn1a': "--model TCR -trans 3 -n_b 2 -pt avg -res",
     'Trn2a': "--model TCR -trans 23 -n_b 2 -pt avg -res",
@@ -27,6 +38,16 @@ model_cmd = {
     'Trn1v': "--model TCR -trans 3 -n_b 2 -pt vit -res",
     'Trn2v': "--model TCR -trans 23 -n_b 2 -pt vit -res",
     'Trn3v': "--model TCR -trans 123 -n_b 2 -pt vit -res",
+
+    'T0a': "--model TCR -trans 0 -n_b 2 -pt avg -res",
+    'T1a': "--model TCR -trans 1 -n_b 2 -pt avg -res",
+    'T2a': "--model TCR -trans 2 -n_b 2 -pt avg -res",
+    'T3a': "--model TCR -trans 3 -n_b 2 -pt avg -res",
+
+    'T0v': "--model TCR -trans 0 -n_b 2 -pt vit -res",
+    'T1v': "--model TCR -trans 1 -n_b 2 -pt vit -res",
+    'T2v': "--model TCR -trans 2 -n_b 2 -pt vit -res",
+    'T3v': "--model TCR -trans 3 -n_b 2 -pt vit -res",
 } 
 
 # encoder layer

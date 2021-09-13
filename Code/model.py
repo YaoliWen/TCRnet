@@ -179,6 +179,25 @@ class Vit_EncoderLayer(nn.Module):
         out = out[:,0,:] # [B,D]
         return out, attention
 # 
+class Local_split(nn.Module):
+    def __init__(self, size, radio, patch_num):
+        super(Local_split, self).__init__()
+        self.kernel_height = int(size[0] * radio[0])
+        self.kernel_width = int(size[1] * radio[1])
+        self.patch_num = patch_num[0] * patch_num[1]
+        stride_height = (size[0]-self.kernel_height) // (patch_num[0]-1)
+        stride_width = (size[1]-self.kernel_width) // (patch_num[1]-1)
+        kernel = (self.kernel_height, self.kernel_width)
+        stride = (stride_height, stride_width)
+        self.unfold = nn.Unfold(kernel_size=kernel, stride=stride)
+
+    def forward(self, org):
+        unfold_out = self.unfold(input=org)
+        out = unfold_out.transpose(1,2).view(org.size(0), self.patch_num, org.size(1),
+                                             self.kernel_height, self.kernel_width)
+        return out
+
+# 
 class TCRnet(nn.Module):
     def __init__(self, num_classes, trans_layer='0', res=False, pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
         super(TCRnet, self).__init__() # 输入 B*3*224*224
