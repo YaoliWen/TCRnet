@@ -47,7 +47,7 @@ def main(args):
     # Model
     # choose model type
     if 'TCR' in args.model:
-        model = TCRnet(num_classes=args.num_classes, trans_layer=args.trans_layer, pool_type=args.pool_type,
+        model = TCRnet(num_classes=args.num_classes, trans_layer=args.trans_layer, res=args.res, pool_type=args.pool_type,
                         num_heads=args.num_heads, blocks=args.blocks, bias=args.bias, 
                         dropout=args.dropout, model_type=args.model)
     # parallel computer

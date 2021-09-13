@@ -6,17 +6,27 @@ dataset_dic = {
 
 # 模型
 model_cmd = {
-    'base':"--model TCR -trans 0 -n_b 2 -pt gap ",
+    'base':"--model TCR -trans 0 -n_b 2 -pt gap",
 
-    'Tn0a': "--model TCR -trans 0 -n_b 2 -pt avg ",
-    'Tn1a': "--model TCR -trans 3 -n_b 2 -pt avg ",
-    'Tn2a': "--model TCR -trans 23 -n_b 2 -pt avg ",
-    'Tn3a': "--model TCR -trans 123 -n_b 2 -pt avg ",
+    'Tn0a': "--model TCR -trans 0 -n_b 2 -pt avg",
+    'Tn1a': "--model TCR -trans 3 -n_b 2 -pt avg",
+    'Tn2a': "--model TCR -trans 23 -n_b 2 -pt avg",
+    'Tn3a': "--model TCR -trans 123 -n_b 2 -pt avg",
 
-    'Tn0v': "--model TCR -trans 0 -n_b 2 -pt vit ",
-    'Tn1v': "--model TCR -trans 3 -n_b 2 -pt vit ",
-    'Tn2v': "--model TCR -trans 23 -n_b 2 -pt vit ",
-    'Tn3v': "--model TCR -trans 123 -n_b 2 -pt vit ",
+    'Tn0v': "--model TCR -trans 0 -n_b 2 -pt vit",
+    'Tn1v': "--model TCR -trans 3 -n_b 2 -pt vit",
+    'Tn2v': "--model TCR -trans 23 -n_b 2 -pt vit",
+    'Tn3v': "--model TCR -trans 123 -n_b 2 -pt vit",
+
+    'Trn0a': "--model TCR -trans 0 -n_b 2 -pt avg -res",
+    'Trn1a': "--model TCR -trans 3 -n_b 2 -pt avg -res",
+    'Trn2a': "--model TCR -trans 23 -n_b 2 -pt avg -res",
+    'Trn3a': "--model TCR -trans 123 -n_b 2 -pt avg -res",
+
+    'Trn0v': "--model TCR -trans 0 -n_b 2 -pt vit -res",
+    'Trn1v': "--model TCR -trans 3 -n_b 2 -pt vit -res",
+    'Trn2v': "--model TCR -trans 23 -n_b 2 -pt vit -res",
+    'Trn3v': "--model TCR -trans 123 -n_b 2 -pt vit -res",
 } 
 
 # encoder layer
@@ -58,8 +68,8 @@ scheme_dict = {
     },
 
     'TC_Res':{
-            '0': 'RAF0_Tn2v_e0_c0_p0_l0_b0_d0', #
-            '1': 'RAFf_Tn2v_e0_c0_p0_l0_b0_d0', #  
+            '0': 'RAF0_Trn2v_e0_c0_p0_l0_b0_d0', #
+            '1': 'RAFf_Trn2v_e0_c0_p0_l0_b0_d0', #  
         },
 }
 

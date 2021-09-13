@@ -36,7 +36,7 @@ def train_args(command):
                          help='interval of epoch between lr changes')
     parser.add_argument('-b', '--batch_size', default=128, type=int,
                             metavar='N', help='train batch size (default: 128)')
-    
+                            
     # model
     parser.add_argument('--model', type=str,  help='the type of model, include global, gllc, trans')
     parser.add_argument('-n_b', '--blocks', default=2, type=int,
@@ -45,6 +45,8 @@ def train_args(command):
                         choices=['avg','vit','gap'],
                         type=str, help='type of the last pooling layer')
     parser.add_argument('--trans_layer', '-trans', type=str, help='selected transformer layer')
+    set_bool_action(parser=parser, param_name='res', command_name='res')
+
     # encoder
     parser.add_argument('-n_h', '--num_heads', default=8, type=int,
                         help='the number of heads (default:8)')

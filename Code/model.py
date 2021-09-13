@@ -180,11 +180,12 @@ class Vit_EncoderLayer(nn.Module):
         return out, attention
 # 
 class TCRnet(nn.Module):
-    def __init__(self, num_classes, trans_layer='0', pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
+    def __init__(self, num_classes, trans_layer='0', res=False, pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
         super(TCRnet, self).__init__() # 输入 B*3*224*224
         self.inplanes = 64
         self.model_type = model_type
         self.trans_layer = trans_layer
+        self.res = res
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)  #(224-6+6)/2=112 64*112*112
         self.bn1 = nn.BatchNorm2d(64)
@@ -252,20 +253,32 @@ class TCRnet(nn.Module):
         f = self.layer1(f)  # [B,64,56,56]
 
         if '1' in self.trans_layer:
+            if self.res:
+                residual = f
             f, attention1 = self.trans1(f) # [B,64,56,56]
             attention.append(attention1) # [B,num_head,3136,3136]
+            if self.res:
+                f = f + residual
 
         f = self.layer2(f) # [B,128,28,28]
 
         if '2' in self.trans_layer:
+            if self.res:
+                residual = f
             f, attention2 = self.trans2(f) # [B,128,28,28]
             attention.append(attention2) # [B,num_head,784,784]
+            if self.res:
+                f = f + residual
 
         f = self.layer3(f) # [B,256,14,14]
 
         if '3' in self.trans_layer:
+            if self.res:
+                residual = f
             f, attention3 = self.trans3(f) # [B,256,14,14]
             attention.append(attention3) # [B,num_head,196,196]
+            if self.res:
+                f = f + residual
 
         f = self.layer4(f) # [B,512,7,7]
 
@@ -273,7 +286,11 @@ class TCRnet(nn.Module):
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
         if self.pool_type=='avg':
+            if self.res:
+                residual = f
             f, attention4 = self.trans4(f) # [B,512,7,7]
+            if self.res:
+                f = f + residual
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
             attention.append(attention4) # [B,num_head,49,49]
