@@ -178,24 +178,20 @@ class Vit_EncoderLayer(nn.Module):
         out = residual + out # [B,1+H*W,D]
         out = out[:,0,:] # [B,D]
         return out, attention
-# 
-class Local_split(nn.Module):
-    def __init__(self, size, radio, patch_num):
-        super(Local_split, self).__init__()
-        self.kernel_height = int(size[0] * radio[0])
-        self.kernel_width = int(size[1] * radio[1])
-        self.patch_num = patch_num[0] * patch_num[1]
-        stride_height = (size[0]-self.kernel_height) // (patch_num[0]-1)
-        stride_width = (size[1]-self.kernel_width) // (patch_num[1]-1)
-        kernel = (self.kernel_height, self.kernel_width)
-        stride = (stride_height, stride_width)
-        self.unfold = nn.Unfold(kernel_size=kernel, stride=stride)
 
-    def forward(self, org):
-        unfold_out = self.unfold(input=org)
-        out = unfold_out.transpose(1,2).view(org.size(0), self.patch_num, org.size(1),
-                                             self.kernel_height, self.kernel_width)
-        return out
+# 
+def Local_split(org, size, radio, patch_num):
+    kernel_height = int(size[0] * radio[0])
+    kernel_width = int(size[1] * radio[1])
+    patch_num = patch_num[0] * patch_num[1]
+    stride_height = (size[0]-kernel_height) // (patch_num[0]-1)
+    stride_width = (size[1]-kernel_width) // (patch_num[1]-1)
+    kernel = (kernel_height, kernel_width)
+    stride = (stride_height, stride_width)
+    unfold_out = nn.functional.unfold(input=org, kernel_size=kernel, stride=stride)
+    out = unfold_out.transpose(1,2).view(org.size(0)*patch_num, org.size(1),
+                                        kernel_height, kernel_width)
+    return out # [B*P,D,H*R,W*R]
 
 # 
 class TCRnet(nn.Module):
@@ -264,11 +260,20 @@ class TCRnet(nn.Module):
     def forward(self, x):
         # x: [B,3,224,224] [B,C,224,224]
         attention = []
+        attention_local = []
+        local_branch = False
         # forward
-        f = self.conv1(x) # [B, D, H, W]
+        f = self.conv1(x) # [B,64,112,112]([B, D, H, W])
         f = self.bn1(f)
         f = self.relu(f)
         f = self.maxpool(f) # [B,64,56,56]
+
+        if self.local_start == 1:
+            f_local = Local_split(org=f, size=(56,56), radio=self.radio,
+                                patch_num=self.patch_num) # [B*P,64,24,24]
+            local_branch = True
+        if local_branch:
+            f_local = self.layer1(f_local) # [B,P,64,24,24]
         f = self.layer1(f)  # [B,64,56,56]
 
         if '1' in self.trans_layer:
@@ -279,7 +284,13 @@ class TCRnet(nn.Module):
             if self.res:
                 f = f + residual
 
-        f = self.layer2(f) # [B,128,28,28]
+        if self.local_start == 2:
+            f_local = Local_split(org=f, size=(56,56), radio=self.radio,
+                                patch_num=self.patch_num) # [B*P,64,24,24]
+            local_branch = True
+        if local_branch:
+            f_local = self.layer2(f_local) # [B,128,14,14]
+        f = self.layer2(f) # [B,128,28,28] 
 
         if '2' in self.trans_layer:
             if self.res:
@@ -289,6 +300,12 @@ class TCRnet(nn.Module):
             if self.res:
                 f = f + residual
 
+        if self.local_start == 3:
+            f_local = Local_split(org=f, size=(28,28), radio=self.radio,
+                                patch_num=self.patch_num) # [B*P,64,12,12]
+            local_branch = True
+        if local_branch:
+            f_local = self.layer3(f_local) # [B,256,6,6]
         f = self.layer3(f) # [B,256,14,14]
 
         if '3' in self.trans_layer:
@@ -299,6 +316,12 @@ class TCRnet(nn.Module):
             if self.res:
                 f = f + residual
 
+        if self.local_start == 4:
+            f_local = Local_split(org=f, size=(56,56), radio=self.radio,
+                                patch_num=self.patch_num) # [B*P,64,6,6]
+            local_branch = True
+        if local_branch:
+            f_local = self.layer4(f_local) # [B,512,3,3]
         f = self.layer4(f) # [B,512,7,7]
 
         if self.pool_type=='gap':
@@ -313,12 +336,35 @@ class TCRnet(nn.Module):
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
             attention.append(attention4) # [B,num_head,49,49]
+            
         if self.pool_type=='vit':
             f, attention4 = self.vitpool(f) # [B,512]
             attention.append(attention4)
         
+        if self.pool_local=='gap' and local_branch:
+            f_local = self.avgpool(f_local) # [B*P,512,1,1]
+            f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
+        if self.pool_local=='avg' and local_branch:
+            if self.res:
+                residual = f_local
+            f_local, attention_local4 = self.trans4(f_local) # [B*P,512,7,7]
+            if self.res:
+                f_local = f_local + residual
+            f_local = self.avgpool(f_local) # [B*P,512,1,1]
+            f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
+            attention_local.append(attention_local4) # [B*P,num_head,49,49]
+        if self.pool_local=='vit' and local_branch:
+            f_local, attention_local4 = self.vitpool(f_local) # [B*P,512]
+            attention_local.append(attention_local4)
+
         if self.is_BN:
             f = self.bn2(f)
+            if local_branch:
+                f_local = self.bn2(f_local)
+
         prec_score = self.fc(f)
-        return prec_score, attention
+        if local_branch:
+            score_local = self.fc(f_local)
+
+        return prec_score, score_local, attention, attention_local
  
