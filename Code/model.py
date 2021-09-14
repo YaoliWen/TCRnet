@@ -195,12 +195,15 @@ def Local_split(org, size, radio, patch_num):
 
 # 
 class TCRnet(nn.Module):
-    def __init__(self, num_classes, trans_layer='0', res=False, pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
+    def __init__(self, num_classes, local_start=0, radio=(0,0), patch_num=(3,3), trans_layer='0', res=False, pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
         super(TCRnet, self).__init__() # 输入 B*3*224*224
         self.inplanes = 64
         self.model_type = model_type
         self.trans_layer = trans_layer
         self.res = res
+        self.local_start = local_start
+        self.radio = radio
+        self.patch_num = patch_num
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)  #(224-6+6)/2=112 64*112*112
         self.bn1 = nn.BatchNorm2d(64)
@@ -262,6 +265,9 @@ class TCRnet(nn.Module):
         attention = []
         attention_local = []
         local_branch = False
+        score_local = None
+        attention_local = None
+
         # forward
         f = self.conv1(x) # [B,64,112,112]([B, D, H, W])
         f = self.bn1(f)
@@ -327,6 +333,9 @@ class TCRnet(nn.Module):
         if self.pool_type=='gap':
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
+            if local_branch:
+                f_local = self.avgpool(f_local) # [B*P,512,1,1]
+                f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
         if self.pool_type=='avg':
             if self.res:
                 residual = f
@@ -336,35 +345,30 @@ class TCRnet(nn.Module):
             f = self.avgpool(f) # [B,512,1,1]
             f = f.squeeze(3).squeeze(2) # [B,512]
             attention.append(attention4) # [B,num_head,49,49]
-            
+            if local_branch:
+                if self.res:
+                    residual = f_local
+                f_local, attention_local4 = self.trans4(f_local) # [B*P,512,7,7]
+                if self.res:
+                    f_local = f_local + residual
+                f_local = self.avgpool(f_local) # [B*P,512,1,1]
+                f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
+                attention_local.append(attention_local4) # [B*P,num_head,49,49]
         if self.pool_type=='vit':
             f, attention4 = self.vitpool(f) # [B,512]
             attention.append(attention4)
+            if local_branch:
+                f_local, attention_local4 = self.vitpool(f_local) # [B*P,512]
+                attention_local.append(attention_local4)
         
-        if self.pool_local=='gap' and local_branch:
-            f_local = self.avgpool(f_local) # [B*P,512,1,1]
-            f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
-        if self.pool_local=='avg' and local_branch:
-            if self.res:
-                residual = f_local
-            f_local, attention_local4 = self.trans4(f_local) # [B*P,512,7,7]
-            if self.res:
-                f_local = f_local + residual
-            f_local = self.avgpool(f_local) # [B*P,512,1,1]
-            f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
-            attention_local.append(attention_local4) # [B*P,num_head,49,49]
-        if self.pool_local=='vit' and local_branch:
-            f_local, attention_local4 = self.vitpool(f_local) # [B*P,512]
-            attention_local.append(attention_local4)
-
         if self.is_BN:
             f = self.bn2(f)
             if local_branch:
                 f_local = self.bn2(f_local)
 
-        prec_score = self.fc(f)
         if local_branch:
             score_local = self.fc(f_local)
+        prec_score = self.fc(f)
 
         return prec_score, score_local, attention, attention_local
  
