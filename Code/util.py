@@ -114,7 +114,9 @@ def adjust_learning_rate(args, optimizer, epoch):
 
 # base name
 def base_file_name(args):
-    name = "{dataset}/{subset}/({model})nb_{n_b}-{res}-pt_{pt}-nh_{n_h}-d_{dp}-vr{vr}-'{pretrain}'-b_{b}-lr_{lr}-No.{name}".format(
-        dataset=args.dataset, subset=args.subset, model=args.model, n_b=args.blocks, res='res' if args.res else 'n_res', pt=args.pool_type, n_h=args.num_heads,
+    name = "{dataset}/{subset}/({model})-ls_{ls}-rd_{rd}-pn_{pn}-nb_{n_b}-{res}-pt_{pt}-nh_{n_h}-d_{dp}-vr{vr}-'{pretrain}'-b_{b}-lr_{lr}-No.{name}".format(
+        dataset=args.dataset, subset=args.subset, model=args.model,
+        ls=args.local_start, rd=str(args.radio).replace(',','-'), pn=args.patch_num,
+        n_b=args.blocks, res='res' if args.res else 'n_res', pt=args.pool_type, n_h=args.num_heads,
         dp=args.dropout, pretrain=args.pretrain, b=args.batch_size, lr=args.lr, name=args.name, vr= args.var_rate if args.var_loss else '0')
     return name

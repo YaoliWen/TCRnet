@@ -47,7 +47,9 @@ def main(args):
     # Model
     # choose model type
     if 'TCR' in args.model:
-        model = TCRnet(num_classes=args.num_classes, trans_layer=args.trans_layer, res=args.res, pool_type=args.pool_type,
+        model = TCRnet(num_classes=args.num_classes,
+                        local_start=args.local_start, radio=tuple(args.radio), patch_num=tuple(args.patch_num),
+                        trans_layer=args.trans_layer, res=args.res, pool_type=args.pool_type,
                         num_heads=args.num_heads, blocks=args.blocks, bias=args.bias, 
                         dropout=args.dropout, model_type=args.model)
     # parallel computer
@@ -143,7 +145,7 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         # Forward propagation
         input_var = torch.autograd.Variable(img.cuda()) # [B, 3, 224, 224] 放入变量图中
         target_var = torch.autograd.Variable(label.cuda()) # [B,1] 放入变量图中
-        prec_score, attention_all = model(input_var)
+        prec_score, score_local, attention_all, attention_local_all = model(input_var)
 
         # Loss
         # base loss
@@ -232,7 +234,7 @@ def validate(args, val_loader, model, criterion, epoch):
             # Forward propagation
             input_var = torch.autograd.Variable(img.cuda()) # [B, 3, 224, 224] 放入变量图中
             target_var = torch.autograd.Variable(label.cuda()) # [B,1] 放入变量图中
-            prec_score, attention_all = model(input_var)
+            prec_score, score_local, attention_all, attention_local_all = model(input_var)
 
             # Loss
             base_loss = criterion['base'](prec_score, target_var) # crossentropy的均值

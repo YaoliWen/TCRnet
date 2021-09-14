@@ -195,7 +195,7 @@ def Local_split(org, size, radio, patch_num):
 
 # 
 class TCRnet(nn.Module):
-    def __init__(self, num_classes, local_start=0, radio=(0,0), patch_num=(3,3), trans_layer='0', res=False, pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
+    def __init__(self, num_classes, local_start=0, radio=(0,0), patch_num=(0,0), trans_layer='0', res=False, pool_type='avg', num_heads=8, blocks=2, dropout=0.0, bias=True, model_type=None, is_BN=False):
         super(TCRnet, self).__init__() # 输入 B*3*224*224
         self.inplanes = 64
         self.model_type = model_type

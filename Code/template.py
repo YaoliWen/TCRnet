@@ -39,16 +39,23 @@ model_cmd = {
     'Trn2v': "--model TCR -trans 23 -n_b 2 -pt vit -res",
     'Trn3v': "--model TCR -trans 123 -n_b 2 -pt vit -res",
 
-    'T0a': "--model TCR -trans 0 -n_b 2 -pt avg -res",
-    'T1a': "--model TCR -trans 1 -n_b 2 -pt avg -res",
-    'T2a': "--model TCR -trans 2 -n_b 2 -pt avg -res",
-    'T3a': "--model TCR -trans 3 -n_b 2 -pt avg -res",
+    'T0ar': "--model TCR -trans 0 -n_b 2 -pt avg -res",
+    'T1ar': "--model TCR -trans 1 -n_b 2 -pt avg -res",
+    'T2ar': "--model TCR -trans 2 -n_b 2 -pt avg -res",
+    'T3ar': "--model TCR -trans 3 -n_b 2 -pt avg -res",
 
-    'T0v': "--model TCR -trans 0 -n_b 2 -pt vit -res",
-    'T1v': "--model TCR -trans 1 -n_b 2 -pt vit -res",
-    'T2v': "--model TCR -trans 2 -n_b 2 -pt vit -res",
-    'T3v': "--model TCR -trans 3 -n_b 2 -pt vit -res",
+    'T0vr': "--model TCR -trans 0 -n_b 2 -pt vit -res",
+    'T1vr': "--model TCR -trans 1 -n_b 2 -pt vit -res",
+    'T2vr': "--model TCR -trans 2 -n_b 2 -pt vit -res",
+    'T3vr': "--model TCR -trans 3 -n_b 2 -pt vit -res",
 } 
+
+# local branch
+local_cmd = {
+    'lc0': "-ls 0 -rd 0 0 -pn 0 0",
+    'lc1': "-ls 1 -rd 0.4286 0.4286 -pn 3 3", # (3/7,3/7) (3,3) 
+}
+
 
 # encoder layer
 encoder_cmd = {
@@ -89,12 +96,12 @@ scheme_dict = {
     },
 
     'TC_Res':{
-            '0': 'RAF0_Trn2v_e0_c0_p0_l0_b0_d0', #
-            '1': 'RAFf_Trn2v_e0_c0_p0_l0_b0_d0', #  
+            '0': 'RAF0_Trn2v_lc0_e0_c0_p0_l0_b0_d0', #
+            '1': 'RAFf_Trn2v_lc1_e0_c0_p0_l0_b0_d0', #  
         },
 }
 
 # 命令集dictionary
 command_dict = {**dataset_dic, **model_cmd, **encoder_cmd, **pretrain_cmd,
-                **lr_batch_cmd, **basic_cmd, **device_cmd, **loss_cmd}
+                **lr_batch_cmd, **basic_cmd, **device_cmd, **loss_cmd, **local_cmd}
 

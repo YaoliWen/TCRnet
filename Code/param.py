@@ -59,6 +59,12 @@ def train_args(command):
     set_bool_action(parser=parser, param_name='var_loss', command_name='var')
     parser.add_argument('--var_rate', '-vr', default=0.0 , type=float, help= 'rate of variance loss')
 
+    # local branch
+    parser.add_argument('--local_start', '-ls', type=int, help='the start layer of local branch')
+    parser.add_argument('--radio', '-rd', nargs='*', type=float, help='the radio of local patch to origion image')
+    parser.add_argument('--patch_num', '-pn', nargs='*', type=int, help='the number of local patch in row and colum (x,y)')
+
+    # 解析canshu
     args = parser.parse_args(shlex.split(command))
     return args
 
