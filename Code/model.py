@@ -262,89 +262,90 @@ class TCRnet(nn.Module):
 
     def forward(self, x):
         # x: [B,3,224,224] [B,C,224,224]
-        attention = []
-        attention_local = []
+        batch_size = x.size(0)
+        attention_gl = []
+        attention_lc = []
         local_branch = False
-        score_local = None
-        attention_local = None
+        score_lc_all = None
+        attention_lc = None
 
         # forward
-        f = self.conv1(x) # [B,64,112,112]([B, D, H, W])
-        f = self.bn1(f)
-        f = self.relu(f)
-        f = self.maxpool(f) # [B,64,56,56]
+        f_global = self.conv1(x) # [B,64,112,112]([B, D, H, W])
+        f_global = self.bn1(f_global)
+        f_global = self.relu(f_global)
+        f_global = self.maxpool(f_global) # [B,64,56,56]
 
         if self.local_start == 1:
-            f_local = Local_split(org=f, size=(56,56), radio=self.radio,
+            f_local = Local_split(org=f_global, size=(56,56), radio=self.radio,
                                 patch_num=self.patch_num) # [B*P,64,24,24]
             local_branch = True
         if local_branch:
             f_local = self.layer1(f_local) # [B,P,64,24,24]
-        f = self.layer1(f)  # [B,64,56,56]
+        f_global = self.layer1(f_global)  # [B,64,56,56]
 
         if '1' in self.trans_layer:
             if self.res:
-                residual = f
-            f, attention1 = self.trans1(f) # [B,64,56,56]
-            attention.append(attention1) # [B,num_head,3136,3136]
+                residual = f_global
+            f_global, attention1 = self.trans1(f_global) # [B,64,56,56]
+            attention_gl.append(attention1) # [B,num_head,3136,3136]
             if self.res:
-                f = f + residual
+                f_global = f_global + residual
 
         if self.local_start == 2:
-            f_local = Local_split(org=f, size=(56,56), radio=self.radio,
+            f_local = Local_split(org=f_global, size=(56,56), radio=self.radio,
                                 patch_num=self.patch_num) # [B*P,64,24,24]
             local_branch = True
         if local_branch:
-            f_local = self.layer2(f_local) # [B,128,14,14]
-        f = self.layer2(f) # [B,128,28,28] 
+            f_local = self.layer2(f_local) # [B*P,128,12,12]
+        f_global = self.layer2(f_global) # [B,128,28,28] 
 
         if '2' in self.trans_layer:
             if self.res:
-                residual = f
-            f, attention2 = self.trans2(f) # [B,128,28,28]
-            attention.append(attention2) # [B,num_head,784,784]
+                residual = f_global
+            f_global, attention2 = self.trans2(f_global) # [B,128,28,28]
+            attention_gl.append(attention2) # [B,num_head,784,784]
             if self.res:
-                f = f + residual
+                f_global = f_global + residual
 
         if self.local_start == 3:
-            f_local = Local_split(org=f, size=(28,28), radio=self.radio,
+            f_local = Local_split(org=f_global, size=(28,28), radio=self.radio,
                                 patch_num=self.patch_num) # [B*P,64,12,12]
             local_branch = True
         if local_branch:
-            f_local = self.layer3(f_local) # [B,256,6,6]
-        f = self.layer3(f) # [B,256,14,14]
+            f_local = self.layer3(f_local) # [B*P,256,6,6]
+        f_global = self.layer3(f_global) # [B,256,14,14]
 
         if '3' in self.trans_layer:
             if self.res:
-                residual = f
-            f, attention3 = self.trans3(f) # [B,256,14,14]
-            attention.append(attention3) # [B,num_head,196,196]
+                residual = f_global
+            f_global, attention3 = self.trans3(f_global) # [B,256,14,14]
+            attention_gl.append(attention3) # [B,num_head,196,196]
             if self.res:
-                f = f + residual
+                f_global = f_global + residual
 
         if self.local_start == 4:
-            f_local = Local_split(org=f, size=(56,56), radio=self.radio,
+            f_local = Local_split(org=f_global, size=(56,56), radio=self.radio,
                                 patch_num=self.patch_num) # [B*P,64,6,6]
             local_branch = True
         if local_branch:
-            f_local = self.layer4(f_local) # [B,512,3,3]
-        f = self.layer4(f) # [B,512,7,7]
+            f_local = self.layer4(f_local) # [B*P,512,3,3]
+        f_global = self.layer4(f_global) # [B,512,7,7]
 
         if self.pool_type=='gap':
-            f = self.avgpool(f) # [B,512,1,1]
-            f = f.squeeze(3).squeeze(2) # [B,512]
+            f_global = self.avgpool(f_global) # [B,512,1,1]
+            f_global = f_global.squeeze(3).squeeze(2) # [B,512]
             if local_branch:
                 f_local = self.avgpool(f_local) # [B*P,512,1,1]
                 f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
         if self.pool_type=='avg':
             if self.res:
-                residual = f
-            f, attention4 = self.trans4(f) # [B,512,7,7]
+                residual = f_global
+            f_global, attention4 = self.trans4(f_global) # [B,512,7,7]
             if self.res:
-                f = f + residual
-            f = self.avgpool(f) # [B,512,1,1]
-            f = f.squeeze(3).squeeze(2) # [B,512]
-            attention.append(attention4) # [B,num_head,49,49]
+                f_global = f_global + residual
+            f_global = self.avgpool(f_global) # [B,512,1,1]
+            f_global = f_global.squeeze(3).squeeze(2) # [B,512]
+            attention_gl.append(attention4) # [B,num_head,49,49]
             if local_branch:
                 if self.res:
                     residual = f_local
@@ -353,22 +354,25 @@ class TCRnet(nn.Module):
                     f_local = f_local + residual
                 f_local = self.avgpool(f_local) # [B*P,512,1,1]
                 f_local = f_local.squeeze(3).squeeze(2) # [B*P,512]
-                attention_local.append(attention_local4) # [B*P,num_head,49,49]
+                attention_lc.append(attention_local4) # [B*P,num_head,49,49]
         if self.pool_type=='vit':
-            f, attention4 = self.vitpool(f) # [B,512]
-            attention.append(attention4)
+            f_global, attention4 = self.vitpool(f_global) # [B,512]
+            attention_gl.append(attention4)
             if local_branch:
                 f_local, attention_local4 = self.vitpool(f_local) # [B*P,512]
-                attention_local.append(attention_local4)
+                attention_lc.append(attention_local4)
         
         if self.is_BN:
-            f = self.bn2(f)
+            f_global = self.bn2(f_global) # [B,512]
             if local_branch:
-                f_local = self.bn2(f_local)
+                f_local = self.bn2(f_local) # [B*P,512]
 
         if local_branch:
-            score_local = self.fc(f_local)
-        prec_score = self.fc(f)
+            f_local = f_local.view(batch_size,-1,512) # [B,P,512]
+            score_lc_all = self.fc(f_local)  # [B,P,C]
+        score_gl = self.fc(f_global) # [B,C]
+        score_lc = score_lc_all.mean(dim=1)
+        total_score = score_lc + score_gl
 
-        return prec_score, score_local, attention, attention_local
+        return total_score, score_gl, score_lc, score_lc_all, attention_gl, attention_lc
  

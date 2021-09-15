@@ -127,10 +127,20 @@ def main(args):
 def train(args, train_loader, model, criterion, optimizer, epoch, counter):
     start = time.time()
     mini_steps = args.batch_size // args.mini_batch
+    # total
     prec_acc = util.MatrixMeter(args.num_classes)
     loss_data = util.AverageMeter()
-    base_loss_data = util.AverageMeter()
+    # global
+    prec_acc_gl = util.MatrixMeter(args.num_classes)
+    base_loss_gl_data = util.AverageMeter()
     var_loss_data = util.AverageMeter()
+    # local
+    prec_acc_lc = util.MatrixMeter(args.num_classes)
+    patch_acc = util.MatrixMeter(args.num_classes, args.patch_num[0]*args.patch_num[1])
+    base_loss_lc_all_data = util.AverageMeter()
+    base_loss_lc_data = util.AverageMeter()
+    var_loss_lc_data = util.AverageMeter()
+    # constant
     batch_num = len(train_loader)-1
     record_interval = (batch_num // 50 + 1) * 10
 
@@ -145,18 +155,37 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         # Forward propagation
         input_var = torch.autograd.Variable(img.cuda()) # [B, 3, 224, 224] 放入变量图中
         target_var = torch.autograd.Variable(label.cuda()) # [B,1] 放入变量图中
-        prec_score, score_local, attention_all, attention_local_all = model(input_var)
+        total_score, score_gl, score_lc, score_lc_all, attention_gl, attention_lc = model(input_var)
 
         # Loss
-        # base loss
-        base_loss = criterion['base'](prec_score, target_var) # crossentropy的均值
-        loss = base_loss
-        # variance loss
+        ## global
+        ### base loss
+        base_loss_gl = criterion['base'](score_gl, target_var) # cross entropy的均值
+        loss = base_loss_gl
+        ### var loss
         if args.var_loss:
-            var_loss = criterion['var'](attention_all)
-            loss += args.var_rate * var_loss.sum()
+            var_loss_gl = criterion['var'](attention_gl)
+            loss += args.var_rate * var_loss_gl.sum()
 
-        
+        ## local
+        if args.local_start > 0:
+            ### base loss
+            base_loss_lc_all = []
+            for scl in score_lc_all.transpose(0,1):
+                base_loss_lc_all.append(criterion['base'](scl, target_var)) # 一个local branch的cross entropy的均值
+            base_loss_lc_all = torch.stack(base_loss_lc_all, dim=0) # [P] 所有local 分支分别的base loss
+            ### (avg) base loss
+            base_loss_lc = criterion['base'](score_lc, target_var) # 平均得分的cross entropy均值
+            loss += base_loss_lc
+            ### var loss
+            if args.var_loss:
+                var_loss_lc = criterion['var'](attention_lc)
+                loss += args.var_rate_lc * var_loss_lc
+        ### default
+        else:
+            base_loss_lc_all = torch.Tensor([0]).cuda()
+            base_loss_lc = torch.Tensor([0]).cuda()
+            var_loss_lc = torch.Tensor([0]).cuda()
 
         # Back propagation
         loss_mini = loss * mini_batch_size / args.batch_size
@@ -167,28 +196,41 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
             optimizer.zero_grad()
 
         # Update data
-        prec_acc.update(prec_score.cpu(), label.cpu())
+        ## total
+        prec_acc.update(total_score.cpu(), label.cpu())
         loss_data.update(loss.item())
-        base_loss_data.update(base_loss.item())
-        var_loss_data.update(var_loss.cpu().numpy() * args.var_rate)
+        ## global
+        prec_acc_gl.update(score_gl.cpu(), label.cpu())
+        base_loss_gl_data.update(base_loss_gl.item())
+        var_loss_data.update(var_loss_gl.cpu().numpy() * args.var_rate)
+        ## local
+        prec_acc_lc.update(score_lc.cpu(), label.cpu())
+        patch_acc.update(score_lc_all.cpu(), label.cpu())
+        base_loss_lc_all_data.update(base_loss_lc_all.cpu().numpy())
+        base_loss_lc_data.update(base_loss_lc.item())
+        var_loss_lc_data.update(var_loss_lc.item() * args.var_rate_lc)
 
         # Display and save value result
         if i % record_interval == 0:
             print(
-                '{:<12}{:<12}{:<21}{:<26}{:<25}{}'.format('[{:0>3}/{}]'.format(i, batch_num),
-                 'epoch:{:0>3}'.format(epoch), 'loss:{:0<13.11f}'.format(loss_data.val()),
-                 'base loss:{:0<13.11f}'.format(base_loss_data.val()),
-                 'var loss:{:0<13.11f}'.format(var_loss_data.val().sum()),
-                 'acc:{:0<8.6f}'.format(prec_acc.val_acc()))
+                '{progress:<12}{epoch:<12}{loss:<21}{base_loss_gl:<26}{base_loss_lc:<29}{var:<25}{var_lc:<28}{acc_gl:<19}{acc_lc:<19}{acc}'.format(
+                progress='[{:0>3}/{}]'.format(i, batch_num),
+                epoch='epoch:{:0>3}'.format(epoch), loss='loss:{:0<13.11f}'.format(loss_data.val()),
+                base_loss_gl='base loss:{:0<13.11f}'.format(base_loss_gl_data.val()),
+                base_loss_lc='lc base loss:{:0<13.11f}'.format(base_loss_lc_data.val().sum()),
+                var='var loss:{:0<13.11f}'.format(var_loss_data.val().sum()),
+                var_lc='lc var loss:{:0<13.11f}'.format(var_loss_lc_data.val()),
+                acc_gl='acc_gl:{:0<8.6f}'.format(prec_acc_gl.val_acc()),
+                acc_lc='acc_lc:{:0<8.6f}'.format(prec_acc_lc.val_acc()),
+                acc='acc:{:0<8.6f}'.format(prec_acc.val_acc()))
             )
             with SummaryWriter(args.summary_dir) as writer: 
-                writer.add_scalar('Val_trian/base_loss', base_loss_data.val(), counter)
+                writer.add_scalar('Val_trian/base_loss_gl', base_loss_gl_data.val(), counter)
+                writer.add_scalar('Val_trian/base_loss_lc', base_loss_lc_data.val(), counter)
                 writer.add_scalar('Val_trian/Loss', loss_data.val(), counter)
+                writer.add_scalar('Val_trian/acc_gl', prec_acc_gl.val_acc(), counter)
+                writer.add_scalar('Val_trian/acc_lc', prec_acc_lc.val_acc(), counter)
                 writer.add_scalar('Val_trian/Acc', prec_acc.val_acc(), counter)
-                for j, layer_num in enumerate(args.trans_layer):
-                    writer.add_scalar('Val_trian/var_loss_'+layer_num, var_loss_data.val()[j], counter)
-                if args.pool_type in ['avg', 'vit']:
-                    writer.add_scalar('Val_trian/var_loss_4', var_loss_data.val()[-1], counter)
             counter += 1
         
     # Final grad update
@@ -198,23 +240,35 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
 
     # Display and save avg result
     with SummaryWriter(args.summary_dir) as writer: 
-        writer.add_scalar('Avg_trian/base_loss', base_loss_data.avg(), epoch)
+        # base loss & base acc
+        writer.add_scalar('Avg_trian/base_loss_gl', base_loss_gl_data.avg(), epoch)
+        writer.add_scalar('Avg_trian/base_loss_lc', base_loss_lc_data.avg(), epoch)
         writer.add_scalar('Avg_trian/Loss', loss_data.avg(), epoch)
+        writer.add_scalar('Avg_trian/Acc_gl', prec_acc_gl.avg_acc(), epoch)
+        writer.add_scalar('Avg_trian/Acc_lc', prec_acc_lc.avg_acc(), epoch)
         writer.add_scalar('Avg_trian/Acc', prec_acc.avg_acc(), epoch)
-
+        # each label acc
         for i, lab_acc in enumerate(prec_acc.label_acc()):
             writer.add_scalar('Avg_trian_label/acc'+str(i), lab_acc, epoch)
         heatmap = util.heatmap(prec_acc.confus_matrix(), args.dataset)
         writer.add_figure(tag='Train Confusion Matrix',
                           figure=heatmap, global_step=epoch)
-
+        # var loss of attention
         for j, layer_num in enumerate(args.trans_layer):
             writer.add_scalar('Avg_trian/var_loss_'+layer_num, var_loss_data.avg()[j], epoch)
         if args.pool_type in ['avg', 'vit']:
             writer.add_scalar('Avg_trian/var_loss_4', var_loss_data.avg()[-1], epoch)
+            if args.local_start > 0:
+                writer.add_scalar('Avg_trian/var_loss_lc', var_loss_lc_data.avg(), epoch)
 
-    print('Train [{:0>3}]  Loss:{:0<13.11f}  Base loss:{:0<13.11f}  Var loss:{:0<13.11f}  Acc:{:0<8.6f}  Time:{:.2f}'.format(
-            epoch, loss_data.avg(), base_loss_data.avg(), var_loss_data.avg().sum(), prec_acc.avg_acc(), time.time()-start))
+    print('Train [{epoch:0>3}]  Loss:{loss:0<13.11f}'
+        '  [global] base loss:{gl_base:0<13.11f} var loss:{gl_var:0<13.11f}'
+        '  [local] base loss:{lc_base:0<13.11f} var loss:{lc_var:0<13.11f}'
+        '  Acc:{acc:0<8.6f}  gl_acc:{gl_acc:0<8.6f} lc_acc:{lc_acc:0<8.6f}'
+        ' Time:{time:.2f}'.format(
+        epoch=epoch, loss=loss_data.avg(), gl_base=base_loss_gl_data.avg(), gl_var=var_loss_data.avg().sum(),
+        lc_base=base_loss_lc_all_data.avg().mean(), lc_var=var_loss_lc_data.avg(),
+        acc=prec_acc.avg_acc(), gl_acc=prec_acc_gl.avg_acc(), lc_acc=prec_acc_lc.avg_acc(), time=time.time()-start))
     return counter
 
 
@@ -222,10 +276,20 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
 def validate(args, val_loader, model, criterion, epoch):
     with torch.no_grad():
         start = time.time()
+        # total
         prec_acc = util.MatrixMeter(args.num_classes)
         loss_data = util.AverageMeter()
-        base_loss_data = util.AverageMeter()
+        # global
+        prec_acc_gl = util.MatrixMeter(args.num_classes)
+        base_loss_gl_data = util.AverageMeter()
         var_loss_data = util.AverageMeter()
+        # local
+        prec_acc_lc = util.MatrixMeter(args.num_classes)
+        patch_acc = util.MatrixMeter(args.num_classes, args.patch_num[0]*args.patch_num[1])
+        base_loss_lc_all_data = util.AverageMeter()
+        base_loss_lc_data = util.AverageMeter()
+        var_loss_lc_data = util.AverageMeter()
+        
 
         # switch to evaluate mode
         model.eval()
@@ -234,39 +298,87 @@ def validate(args, val_loader, model, criterion, epoch):
             # Forward propagation
             input_var = torch.autograd.Variable(img.cuda()) # [B, 3, 224, 224] 放入变量图中
             target_var = torch.autograd.Variable(label.cuda()) # [B,1] 放入变量图中
-            prec_score, score_local, attention_all, attention_local_all = model(input_var)
+            total_score, score_gl, score_lc, score_lc_all, attention_gl, attention_lc = model(input_var)
 
             # Loss
-            base_loss = criterion['base'](prec_score, target_var) # crossentropy的均值
-            loss = base_loss
-            # variance loss
+            ## global
+            ### base loss
+            base_loss_gl = criterion['base'](score_gl, target_var) # cross entropy的均值
+            loss = base_loss_gl
+            ### variance loss
             if args.var_loss:
-                var_loss = criterion['var'](attention_all)
-                loss += args.var_rate * var_loss.sum()
+                var_loss_gl = criterion['var'](attention_gl)
+                loss += args.var_rate * var_loss_gl.sum()
+
+            ## local
+            if args.local_start > 0:
+                ### base loss
+                base_loss_lc_all = []
+                for scl in score_lc_all.transpose(0,1):
+                    base_loss_lc_all.append(criterion['base'](scl, target_var)) # 一个local branch的cross entropy的均值
+                base_loss_lc_all = torch.stack(base_loss_lc_all, dim=0) # [P] 所有local 分支分别的base loss
+                ### (avg) base loss 
+                base_loss_lc = criterion['base'](score_lc, target_var) # 平均得分的cross entropy均值
+                loss += base_loss_lc
+                ### var loss
+                if args.var_loss:
+                    var_loss_lc = criterion['var'](attention_lc)
+                    loss += args.var_rate_lc * var_loss_lc
+                ### default
+            else:
+                base_loss_lc_all = torch.Tensor([0]).cuda()
+                base_loss_lc = torch.Tensor([0]).cuda()
+                var_loss_lc = torch.Tensor([0]).cuda()
 
             # Update data
-            prec_acc.update(prec_score.cpu(), target_var.cpu())
+            ## total
+            prec_acc.update(total_score.cpu(), label.cpu())
             loss_data.update(loss.item())
-            base_loss_data.update(base_loss.item())
-            var_loss_data.update(var_loss.cpu().numpy() * args.var_rate)
+            ## global
+            prec_acc_gl.update(score_gl.cpu(), label.cpu())
+            base_loss_gl_data.update(base_loss_gl.item())
+            var_loss_data.update(var_loss_gl.cpu().numpy() * args.var_rate)
+            ## local
+            prec_acc_lc.update(score_lc.cpu(), label.cpu())
+            patch_acc.update(score_lc_all.cpu(), label.cpu())
+            base_loss_lc_all_data.update(base_loss_lc_all.cpu().numpy())
+            base_loss_lc_data.update(base_loss_lc.item())
+            var_loss_lc_data.update(var_loss_lc.item() * args.var_rate_lc)
 
         # Display and save avg result 
         with SummaryWriter(args.summary_dir) as writer: 
-            writer.add_scalar('Avg_test/base_loss', base_loss_data.avg(), epoch)
+            writer.add_scalar('Avg_test/base_loss_gl', base_loss_gl_data.avg(), epoch)
+            writer.add_scalar('Avg_test/base_loss_lc', base_loss_lc_data.avg(), epoch)
             writer.add_scalar('Avg_test/Loss', loss_data.avg(), epoch)
+            writer.add_scalar('Avg_test/Acc_gl', prec_acc_gl.avg_acc(), epoch)
+            writer.add_scalar('Avg_test/Acc_lc', prec_acc_lc.avg_acc(), epoch)
             writer.add_scalar('Avg_test/Acc', prec_acc.avg_acc(), epoch)
-
+            # each label acc
             for i, lab_acc in enumerate(prec_acc.label_acc()):
                 writer.add_scalar('Avg_test_label/acc'+str(i), lab_acc, epoch)
             heatmap = util.heatmap(prec_acc.confus_matrix(), args.dataset)
             writer.add_figure(tag='Test Confusion Matrix',
                               figure=heatmap, global_step=epoch)
-
+            # var loss of attention
             for j, layer_num in enumerate(args.trans_layer):
                 writer.add_scalar('Avg_test/var_loss_'+layer_num, var_loss_data.avg()[j], epoch)
             if args.pool_type in ['avg', 'vit']:
                 writer.add_scalar('Avg_test/var_loss_4', var_loss_data.avg()[-1], epoch)
+                if args.local_start > 0:
+                    writer.add_scalar('Avg_test/var_loss_lc', var_loss_lc_data.avg(), epoch)
+            # each patch loss
+            for i, lc_loss in enumerate(base_loss_lc_all_data.avg()):
+                writer.add_scalar('Local_loss_test/patch_{}'.format(i), lc_loss, epoch)
+            # each patch acc
+            for i, lc_acc in enumerate(patch_acc.patch_acc()):
+                writer.add_scalar('Local_acc_test/patch_{}'.format(i), lc_acc, epoch)
 
-        print("Test  [{:0>3}]  Loss:{:0<13.11f}  Base loss:{:0<13.11f}  Var loss:{:0<13.11f}  Acc:{:0<8.6f}  Time:{:.2f}".format(
-            epoch, loss_data.avg(), base_loss_data.avg(), var_loss_data.avg().sum(), prec_acc.avg_acc(), time.time()-start))
+        print('Test  [{epoch:0>3}]  Loss:{loss:0<13.11f}'
+            '  [global] base loss:{gl_base:0<13.11f} var loss:{gl_var:0<13.11f}'
+            '  [local] base loss:{lc_base:0<13.11f} var loss:{lc_var:0<13.11f}'
+            '  Acc:{acc:0<8.6f}  gl_acc:{gl_acc:0<8.6f} lc_acc:{lc_acc:0<8.6f}'
+            ' Time:{time:.2f}'.format(
+            epoch=epoch, loss=loss_data.avg(), gl_base=base_loss_gl_data.avg(), gl_var=var_loss_data.avg().sum(),
+            lc_base=base_loss_lc_all_data.avg().mean(), lc_var=var_loss_lc_data.avg(),
+            acc=prec_acc.avg_acc(), gl_acc=prec_acc_gl.avg_acc(), lc_acc=prec_acc_lc.avg_acc(), time=time.time()-start))
     return prec_acc.avg_acc()

@@ -10,33 +10,67 @@ import matplotlib.pyplot as plt
 
 # 矩阵统计
 class MatrixMeter(object):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, patch_num=None):
         self.num_classes = num_classes
-        self.matrix = np.zeros((num_classes, num_classes)) # 分布矩阵，第一索引为标签，第二索引为预测值
-        self.matrix_val = np.zeros((num_classes, num_classes))
+        if patch_num is not None:
+            self.patch_num = patch_num # P
+            self.matrix = np.zeros((patch_num, num_classes, num_classes)) # 分布矩阵，第一索引为标签，第二索引为预测值
+            self.matrix_val = np.zeros((patch_num, num_classes, num_classes))
+        else:
+            self.patch_num = None
+            self.matrix = np.zeros((num_classes, num_classes)) # 分布矩阵，第一索引为标签，第二索引为预测值
+            self.matrix_val = np.zeros((num_classes, num_classes))
 
     def update(self, score, target):
-        self.matrix_val = np.zeros((self.num_classes, self.num_classes))
-        prec = score.argmax(axis=1) # B
-        for i,j in zip(target, prec):
-            self.matrix_val[i][j] += 1
-        self.matrix += self.matrix_val
+        if self.patch_num is not None:
+            batch_size = target.size(0)
+            self.matrix_val = np.zeros((self.patch_num, self.num_classes, self.num_classes))
+            prec = score.argmax(axis=-1) # [B,P]
+            prec_index = prec.flatten().int() # [B*P]
+            target_index = target.flatten().int() # [B*P]
+            patch_index = np.tile(np.arange(self.patch_num),batch_size) # [P*B]
+            self.matrix_val[patch_index, target_index, prec_index] += 1
+            self.matrix += self.matrix_val
+        else:
+            self.matrix_val = np.zeros((self.num_classes, self.num_classes))
+            prec = score.argmax(axis=1) # B
+            self.matrix_val[target.int(), prec.int()] += 1
+            self.matrix += self.matrix_val
     
     def confus_matrix(self):
-        confusion_matrix = (self.matrix.T/(self.matrix.sum(1))).T
-        return confusion_matrix
+        if self.patch_num is not None:
+            print('only 2D matrix')
+        else:
+            confusion_matrix = (self.matrix.T/(self.matrix.sum(1))).T
+            return confusion_matrix
     
     def label_acc(self):
-        acc = np.diagonal(self.matrix) / self.matrix.sum(1)
-        return acc
+        if self.patch_num is not None:
+            print('only 2D matrix')
+        else:
+            acc = np.diagonal(self.matrix) / self.matrix.sum(1)
+            return acc
 
     def avg_acc(self):
-        acc = np.diagonal(self.matrix).sum() / self.matrix.sum()
+        if self.patch_num is not None:
+            acc = np.diagonal(self.matrix,axis1=1,axis2=2).sum() / self.matrix.sum() # [P,C].sum()/[P,C,C].sum()
+        else:
+            acc = np.diagonal(self.matrix).sum() / self.matrix.sum()
         return acc
 
     def val_acc(self):
-        acc = np.diagonal(self.matrix_val).sum() / self.matrix_val.sum()
-        return acc
+        if self.patch_num is not None:
+            acc = np.diagonal(self.matrix_val,axis1=1,axis2=2).sum() / self.matrix_val.sum() # [P,C].sum()/[P,C,C].sum()
+        else:
+            acc = np.diagonal(self.matrix_val).sum() / self.matrix_val.sum()
+            return acc
+
+    def patch_acc(self):
+        if self.patch_num is not None:
+            acc = np.diagonal(self.matrix,axis1=1,axis2=2).sum(-1) / self.matrix.sum(axis=(1,2))
+            return acc
+        else:
+            print('only 3D matrix')
 
 # 数值统计
 class AverageMeter(object): 

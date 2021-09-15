@@ -84,7 +84,7 @@ device_cmd = {
 
 # 损失参数
 loss_cmd = {
-    'c0': "-var -vr 1"
+    'c0': "-var -vr 1 -vrl 1"
 }
 
 
