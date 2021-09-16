@@ -14,6 +14,6 @@ class VarLoss(nn.Module):
             num_head = attention.shape[1] # n_h
             var = torch.var(attention, dim=-1)
             var_loss = var.sum() / (batch_size * num_head)
-            losses.append(var_loss)
-        losses = torch.Tensor(losses)
+            losses.append(var_loss.unsqueeze(dim=0))
+        losses = torch.cat(losses)
         return losses

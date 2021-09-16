@@ -183,13 +183,13 @@ class Vit_EncoderLayer(nn.Module):
 def Local_split(org, size, radio, patch_num):
     kernel_height = int(size[0] * radio[0])
     kernel_width = int(size[1] * radio[1])
-    patch_num = patch_num[0] * patch_num[1]
     stride_height = (size[0]-kernel_height) // (patch_num[0]-1)
     stride_width = (size[1]-kernel_width) // (patch_num[1]-1)
     kernel = (kernel_height, kernel_width)
     stride = (stride_height, stride_width)
     unfold_out = nn.functional.unfold(input=org, kernel_size=kernel, stride=stride)
-    out = unfold_out.transpose(1,2).view(org.size(0)*patch_num, org.size(1),
+    out = unfold_out.transpose(1,2)
+    out = out.contiguous().view(org.size(0)*patch_num[0]*patch_num[1], org.size(1),
                                         kernel_height, kernel_width)
     return out # [B*P,D,H*R,W*R]
 
@@ -267,7 +267,7 @@ class TCRnet(nn.Module):
         attention_lc = []
         local_branch = False
         score_lc_all = None
-        attention_lc = None
+        score_lc = None
 
         # forward
         f_global = self.conv1(x) # [B,64,112,112]([B, D, H, W])
@@ -367,12 +367,17 @@ class TCRnet(nn.Module):
             if local_branch:
                 f_local = self.bn2(f_local) # [B*P,512]
 
+        score_gl = self.fc(f_global) # [B,C]
+
         if local_branch:
             f_local = f_local.view(batch_size,-1,512) # [B,P,512]
-            score_lc_all = self.fc(f_local)  # [B,P,C]
-        score_gl = self.fc(f_global) # [B,C]
-        score_lc = score_lc_all.mean(dim=1)
-        total_score = score_lc + score_gl
+            score_lc_all = self.fc(f_local) # [B,P,C]
+            score_lc = score_lc_all.mean(dim=1)
+            total_score = score_lc + score_gl
+        else:
+            attention_lc = None
+            total_score = score_gl
+        
 
         return total_score, score_gl, score_lc, score_lc_all, attention_gl, attention_lc
  

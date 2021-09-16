@@ -27,9 +27,10 @@ class MatrixMeter(object):
             self.matrix_val = np.zeros((self.patch_num, self.num_classes, self.num_classes))
             prec = score.argmax(axis=-1) # [B,P]
             prec_index = prec.flatten().int() # [B*P]
-            target_index = target.flatten().int() # [B*P]
-            patch_index = np.tile(np.arange(self.patch_num),batch_size) # [P*B]
-            self.matrix_val[patch_index, target_index, prec_index] += 1
+            target_index = target.flatten().int() # [B]
+            target_index = target_index.numpy().repeat(self.patch_num) # [B*P]
+            patch_index = np.tile(np.arange(self.patch_num),batch_size) # [B*P]
+            self.matrix_val[patch_index,target_index,prec_index] += 1
             self.matrix += self.matrix_val
         else:
             self.matrix_val = np.zeros((self.num_classes, self.num_classes))
@@ -38,6 +39,8 @@ class MatrixMeter(object):
             self.matrix += self.matrix_val
     
     def confus_matrix(self):
+        if self.matrix.sum() == 0:
+            return 0
         if self.patch_num is not None:
             print('only 2D matrix')
         else:
@@ -45,6 +48,8 @@ class MatrixMeter(object):
             return confusion_matrix
     
     def label_acc(self):
+        if self.matrix.sum() == 0:
+            return 0
         if self.patch_num is not None:
             print('only 2D matrix')
         else:
@@ -52,6 +57,8 @@ class MatrixMeter(object):
             return acc
 
     def avg_acc(self):
+        if self.matrix.sum() == 0:
+            return 0
         if self.patch_num is not None:
             acc = np.diagonal(self.matrix,axis1=1,axis2=2).sum() / self.matrix.sum() # [P,C].sum()/[P,C,C].sum()
         else:
@@ -59,6 +66,8 @@ class MatrixMeter(object):
         return acc
 
     def val_acc(self):
+        if self.matrix.sum() == 0:
+            return 0
         if self.patch_num is not None:
             acc = np.diagonal(self.matrix_val,axis1=1,axis2=2).sum() / self.matrix_val.sum() # [P,C].sum()/[P,C,C].sum()
         else:
@@ -66,8 +75,12 @@ class MatrixMeter(object):
             return acc
 
     def patch_acc(self):
+        if self.matrix.sum() == 0:
+            print('xxx')
+            return 0
         if self.patch_num is not None:
             acc = np.diagonal(self.matrix,axis1=1,axis2=2).sum(-1) / self.matrix.sum(axis=(1,2))
+            print(acc)
             return acc
         else:
             print('only 3D matrix')
@@ -90,6 +103,8 @@ class AverageMeter(object):
         self.count += n
 
     def avg(self):
+        if self.count == 0:
+            return 0
         return self.sum / self.count
     
     def val(self):

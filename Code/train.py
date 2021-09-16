@@ -180,7 +180,7 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
             ### var loss
             if args.var_loss:
                 var_loss_lc = criterion['var'](attention_lc)
-                loss += args.var_rate_lc * var_loss_lc
+                loss = loss+args.var_rate_lc * var_loss_lc
         ### default
         else:
             base_loss_lc_all = torch.Tensor([0]).cuda()
@@ -202,13 +202,14 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         ## global
         prec_acc_gl.update(score_gl.cpu(), label.cpu())
         base_loss_gl_data.update(base_loss_gl.item())
-        var_loss_data.update(var_loss_gl.cpu().numpy() * args.var_rate)
+        var_loss_data.update(var_loss_gl.detach().cpu().numpy() * args.var_rate)
         ## local
-        prec_acc_lc.update(score_lc.cpu(), label.cpu())
-        patch_acc.update(score_lc_all.cpu(), label.cpu())
-        base_loss_lc_all_data.update(base_loss_lc_all.cpu().numpy())
-        base_loss_lc_data.update(base_loss_lc.item())
-        var_loss_lc_data.update(var_loss_lc.item() * args.var_rate_lc)
+        if args.local_start > 0:
+            prec_acc_lc.update(score_lc.cpu(), label.cpu())
+            patch_acc.update(score_lc_all.cpu(), label.cpu())
+            base_loss_lc_all_data.update(base_loss_lc_all.detach().cpu().numpy())
+            base_loss_lc_data.update(base_loss_lc.item())
+            var_loss_lc_data.update(var_loss_lc.item() * args.var_rate_lc)
 
         # Display and save value result
         if i % record_interval == 0:
@@ -217,7 +218,7 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
                 progress='[{:0>3}/{}]'.format(i, batch_num),
                 epoch='epoch:{:0>3}'.format(epoch), loss='loss:{:0<13.11f}'.format(loss_data.val()),
                 base_loss_gl='base loss:{:0<13.11f}'.format(base_loss_gl_data.val()),
-                base_loss_lc='lc base loss:{:0<13.11f}'.format(base_loss_lc_data.val().sum()),
+                base_loss_lc='lc base loss:{:0<13.11f}'.format(base_loss_lc_data.val()),
                 var='var loss:{:0<13.11f}'.format(var_loss_data.val().sum()),
                 var_lc='lc var loss:{:0<13.11f}'.format(var_loss_lc_data.val()),
                 acc_gl='acc_gl:{:0<8.6f}'.format(prec_acc_gl.val_acc()),
@@ -267,7 +268,7 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         '  Acc:{acc:0<8.6f}  gl_acc:{gl_acc:0<8.6f} lc_acc:{lc_acc:0<8.6f}'
         ' Time:{time:.2f}'.format(
         epoch=epoch, loss=loss_data.avg(), gl_base=base_loss_gl_data.avg(), gl_var=var_loss_data.avg().sum(),
-        lc_base=base_loss_lc_all_data.avg().mean(), lc_var=var_loss_lc_data.avg(),
+        lc_base=base_loss_lc_all_data.avg().mean() if args.local_start > 0 else 0, lc_var=var_loss_lc_data.avg(),
         acc=prec_acc.avg_acc(), gl_acc=prec_acc_gl.avg_acc(), lc_acc=prec_acc_lc.avg_acc(), time=time.time()-start))
     return counter
 
@@ -323,7 +324,7 @@ def validate(args, val_loader, model, criterion, epoch):
                 ### var loss
                 if args.var_loss:
                     var_loss_lc = criterion['var'](attention_lc)
-                    loss += args.var_rate_lc * var_loss_lc
+                    loss = loss + args.var_rate_lc * var_loss_lc
                 ### default
             else:
                 base_loss_lc_all = torch.Tensor([0]).cuda()
@@ -337,13 +338,14 @@ def validate(args, val_loader, model, criterion, epoch):
             ## global
             prec_acc_gl.update(score_gl.cpu(), label.cpu())
             base_loss_gl_data.update(base_loss_gl.item())
-            var_loss_data.update(var_loss_gl.cpu().numpy() * args.var_rate)
+            var_loss_data.update(var_loss_gl.detach().cpu().numpy() * args.var_rate)
             ## local
-            prec_acc_lc.update(score_lc.cpu(), label.cpu())
-            patch_acc.update(score_lc_all.cpu(), label.cpu())
-            base_loss_lc_all_data.update(base_loss_lc_all.cpu().numpy())
-            base_loss_lc_data.update(base_loss_lc.item())
-            var_loss_lc_data.update(var_loss_lc.item() * args.var_rate_lc)
+            if args.local_start > 0:
+                prec_acc_lc.update(score_lc.cpu(), label.cpu())
+                patch_acc.update(score_lc_all.cpu(), label.cpu())
+                base_loss_lc_all_data.update(base_loss_lc_all.cpu().numpy())
+                base_loss_lc_data.update(base_loss_lc.item())
+                var_loss_lc_data.update(var_loss_lc.item() * args.var_rate_lc)
 
         # Display and save avg result 
         with SummaryWriter(args.summary_dir) as writer: 
@@ -366,12 +368,13 @@ def validate(args, val_loader, model, criterion, epoch):
                 writer.add_scalar('Avg_test/var_loss_4', var_loss_data.avg()[-1], epoch)
                 if args.local_start > 0:
                     writer.add_scalar('Avg_test/var_loss_lc', var_loss_lc_data.avg(), epoch)
-            # each patch loss
-            for i, lc_loss in enumerate(base_loss_lc_all_data.avg()):
-                writer.add_scalar('Local_loss_test/patch_{}'.format(i), lc_loss, epoch)
-            # each patch acc
-            for i, lc_acc in enumerate(patch_acc.patch_acc()):
-                writer.add_scalar('Local_acc_test/patch_{}'.format(i), lc_acc, epoch)
+            if args.local_start > 0:
+                # each patch loss
+                for i, lc_loss in enumerate(base_loss_lc_all_data.avg()):
+                    writer.add_scalar('Local_loss_test/patch_{}'.format(i), lc_loss, epoch)
+                # each patch acc
+                for i, lc_acc in enumerate(patch_acc.patch_acc()):
+                    writer.add_scalar('Local_acc_test/patch_{}'.format(i), lc_acc, epoch)
 
         print('Test  [{epoch:0>3}]  Loss:{loss:0<13.11f}'
             '  [global] base loss:{gl_base:0<13.11f} var loss:{gl_var:0<13.11f}'
@@ -379,6 +382,27 @@ def validate(args, val_loader, model, criterion, epoch):
             '  Acc:{acc:0<8.6f}  gl_acc:{gl_acc:0<8.6f} lc_acc:{lc_acc:0<8.6f}'
             ' Time:{time:.2f}'.format(
             epoch=epoch, loss=loss_data.avg(), gl_base=base_loss_gl_data.avg(), gl_var=var_loss_data.avg().sum(),
-            lc_base=base_loss_lc_all_data.avg().mean(), lc_var=var_loss_lc_data.avg(),
+            lc_base=base_loss_lc_all_data.avg().mean() if args.local_start > 0 else 0 , lc_var=var_loss_lc_data.avg(),
             acc=prec_acc.avg_acc(), gl_acc=prec_acc_gl.avg_acc(), lc_acc=prec_acc_lc.avg_acc(), time=time.time()-start))
     return prec_acc.avg_acc()
+
+# %% 
+# import util
+# xxx = util.MatrixMeter(7, 9)
+
+# %%
+import numpy as np
+xxx = np.zeros(9*7*7)
+# %%
+yyy = xxx.reshape((9,7,7))
+# np.diagonal(yyy,axis1=1,axis2=2).sum(-1) / yyy.sum(axis=(1,2))
+
+# # %%
+# acc = np.diagonal(self.matrix,axis1=1,axis2=2).sum(-1) / self.matrix.sum(axis=(1,2))
+# %%
+yyy[[1,2],[2,2],[3,4]] += 1
+# %%
+yyy[1][2][4]
+# %%
+
+# %%
