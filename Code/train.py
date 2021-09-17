@@ -120,7 +120,10 @@ def main(args):
         }, is_best=is_best.item(), checkp_dir=checkp_dir)
 
         # display best accturacy
-        print("Best Accuracy Is {:0<6.4f}% (epoch:{})".format(best_acc*100, best_epoch))
+        print('{:_<75}'.format(''))
+        print('\033[1;36m'
+        "Best Accuracy Is {:0<6.4f}% (epoch:{})"
+        '\033[0m'.format(best_acc*100, best_epoch))
 
 
 #  Train
@@ -214,16 +217,25 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
         # Display and save value result
         if i % record_interval == 0:
             print(
-                '{progress:<12}{epoch:<12}{loss:<21}{base_loss_gl:<26}{base_loss_lc:<29}{var:<25}{var_lc:<28}{acc_gl:<19}{acc_lc:<19}{acc}'.format(
+                '\033[0;{num}m'
+                '{progress:<12}{epoch:<12}{acc:<16}{loss:<21}\n'
+                '{gl:<12}{base_loss_gl:<26}{var_gl:<25}{acc_gl:<16}\n'
+                '{lc:<12}{base_loss_lc:<26}{var_lc:<25}{acc_lc:<16}'
+                '\033[0m'.format(
+                num=i%3+33,
                 progress='[{:0>3}/{}]'.format(i, batch_num),
-                epoch='epoch:{:0>3}'.format(epoch), loss='loss:{:0<13.11f}'.format(loss_data.val()),
+                epoch='epoch:{:0>3}'.format(epoch), 
+                loss='loss:{:0<13.11f}'.format(loss_data.val()),
+                acc='acc:{:0<8.6f}'.format(prec_acc.val_acc()),
+                gl='[global]',
                 base_loss_gl='base loss:{:0<13.11f}'.format(base_loss_gl_data.val()),
-                base_loss_lc='lc base loss:{:0<13.11f}'.format(base_loss_lc_data.val()),
-                var='var loss:{:0<13.11f}'.format(var_loss_data.val().sum()),
-                var_lc='lc var loss:{:0<13.11f}'.format(var_loss_lc_data.val()),
-                acc_gl='acc_gl:{:0<8.6f}'.format(prec_acc_gl.val_acc()),
-                acc_lc='acc_lc:{:0<8.6f}'.format(prec_acc_lc.val_acc()),
-                acc='acc:{:0<8.6f}'.format(prec_acc.val_acc()))
+                var_gl='var loss:{:0<13.11f}'.format(var_loss_data.val().sum()),
+                acc_gl='acc:{:0<8.6f}'.format(prec_acc_gl.val_acc()),
+                lc='[local]',
+                base_loss_lc='base loss:{:0<13.11f}'.format(base_loss_lc_data.val()),
+                var_lc='var loss:{:0<13.11f}'.format(var_loss_lc_data.val()),
+                acc_lc='acc:{:0<8.6f}'.format(prec_acc_lc.val_acc()) 
+            )
             )
             with SummaryWriter(args.summary_dir) as writer: 
                 writer.add_scalar('Val_trian/base_loss_gl', base_loss_gl_data.val(), counter)
@@ -261,12 +273,12 @@ def train(args, train_loader, model, criterion, optimizer, epoch, counter):
             writer.add_scalar('Avg_trian/var_loss_4', var_loss_data.avg()[-1], epoch)
             if args.local_start > 0:
                 writer.add_scalar('Avg_trian/var_loss_lc', var_loss_lc_data.avg(), epoch)
-
-    print('Train [{epoch:0>3}]  Loss:{loss:0<13.11f}'
-        '  [global] base loss:{gl_base:0<13.11f} var loss:{gl_var:0<13.11f}'
-        '  [local] base loss:{lc_base:0<13.11f} var loss:{lc_var:0<13.11f}'
-        '  Acc:{acc:0<8.6f}  gl_acc:{gl_acc:0<8.6f} lc_acc:{lc_acc:0<8.6f}'
-        ' Time:{time:.2f}'.format(
+    print('{:_<75}'.format(''))
+    print('\033[1;32m'
+        'Train [{epoch:0>3}]  Loss:{loss:0<13.11f}  Acc:{acc:0<8.6f}  Time:{time:.2f}\n'
+        '[global]  base loss:{gl_base:0<13.11f}  var loss:{gl_var:0<13.11f}  acc:{gl_acc:0<8.6f}\n'
+        '[local]   base loss:{lc_base:0<13.11f}  var loss:{lc_var:0<13.11f}  acc:{lc_acc:0<8.6f}'
+        '\033[0m'.format(
         epoch=epoch, loss=loss_data.avg(), gl_base=base_loss_gl_data.avg(), gl_var=var_loss_data.avg().sum(),
         lc_base=base_loss_lc_all_data.avg().mean() if args.local_start > 0 else 0, lc_var=var_loss_lc_data.avg(),
         acc=prec_acc.avg_acc(), gl_acc=prec_acc_gl.avg_acc(), lc_acc=prec_acc_lc.avg_acc(), time=time.time()-start))
@@ -375,34 +387,13 @@ def validate(args, val_loader, model, criterion, epoch):
                 # each patch acc
                 for i, lc_acc in enumerate(patch_acc.patch_acc()):
                     writer.add_scalar('Local_acc_test/patch_{}'.format(i), lc_acc, epoch)
-
-        print('Test  [{epoch:0>3}]  Loss:{loss:0<13.11f}'
-            '  [global] base loss:{gl_base:0<13.11f} var loss:{gl_var:0<13.11f}'
-            '  [local] base loss:{lc_base:0<13.11f} var loss:{lc_var:0<13.11f}'
-            '  Acc:{acc:0<8.6f}  gl_acc:{gl_acc:0<8.6f} lc_acc:{lc_acc:0<8.6f}'
-            ' Time:{time:.2f}'.format(
+        print('{:_<75}'.format(''))
+        print('\033[1;31m'
+            'Test  [{epoch:0>3}]  Loss:{loss:0<13.11f}  Acc:{acc:0<8.6f}  Time:{time:.2f}\n'
+            '[global]  base loss:{gl_base:0<13.11f}  var loss:{gl_var:0<13.11f}  acc:{gl_acc:0<8.6f}\n'
+            '[local]   base loss:{lc_base:0<13.11f}  var loss:{lc_var:0<13.11f}  acc:{lc_acc:0<8.6f}'
+            '\033[0m'.format(
             epoch=epoch, loss=loss_data.avg(), gl_base=base_loss_gl_data.avg(), gl_var=var_loss_data.avg().sum(),
-            lc_base=base_loss_lc_all_data.avg().mean() if args.local_start > 0 else 0 , lc_var=var_loss_lc_data.avg(),
+            lc_base=base_loss_lc_all_data.avg().mean() if args.local_start > 0 else 0, lc_var=var_loss_lc_data.avg(),
             acc=prec_acc.avg_acc(), gl_acc=prec_acc_gl.avg_acc(), lc_acc=prec_acc_lc.avg_acc(), time=time.time()-start))
     return prec_acc.avg_acc()
-
-# %% 
-# import util
-# xxx = util.MatrixMeter(7, 9)
-
-# %%
-import numpy as np
-xxx = np.zeros(9*7*7)
-# %%
-yyy = xxx.reshape((9,7,7))
-# np.diagonal(yyy,axis1=1,axis2=2).sum(-1) / yyy.sum(axis=(1,2))
-
-# # %%
-# acc = np.diagonal(self.matrix,axis1=1,axis2=2).sum(-1) / self.matrix.sum(axis=(1,2))
-# %%
-yyy[[1,2],[2,2],[3,4]] += 1
-# %%
-yyy[1][2][4]
-# %%
-
-# %%
